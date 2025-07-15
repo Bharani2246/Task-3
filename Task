@@ -1,0 +1,91 @@
+import java.io.*;
+import java.net.*;
+import java.util.Vector;
+
+public class ChatServer {
+    private static final int PORT = 9999;
+    private Vector<ClientHandler> clients = new Vector<>();
+
+    public static void main(String[] args) throws IOException {
+        new ChatServer().start();
+    }
+
+    public void start() throws IOException {
+        ServerSocket server = new ServerSocket(PORT);
+        System.out.println("Server started on port " + PORT);
+
+        while (true) {
+            Socket socket = server.accept();
+            System.out.println("New client connected: " + socket);
+
+            ClientHandler handler = new ClientHandler(socket);
+            clients.add(handler);
+            handler.start();
+        }
+    }
+
+    // Broadcasts a message to all clients except the sender
+    public void broadcast(String user, String msg) {
+        for (ClientHandler client : clients) {
+            if (!client.getUserName().equals(user)) {
+                client.sendMessage(user + ": " + msg);
+            }
+        }
+    }
+
+    // Inner class to handle each client connection
+    private class ClientHandler extends Thread {
+        private Socket socket;
+        private BufferedReader in;
+        private PrintWriter out;
+        private String userName;
+
+        public ClientHandler(Socket socket) {
+            this.socket = socket;
+            try {
+                in = new BufferedReader(
+                        new InputStreamReader(socket.getInputStream()));
+                out = new PrintWriter(socket.getOutputStream(), true);
+
+                // First message from client is their username
+                userName = in.readLine();
+                System.out.println(userName + " joined.");
+                out.println("Welcome, " + userName + "!");
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        public String getUserName() {
+            return userName;
+        }
+
+        public void sendMessage(String msg) {
+            out.println(msg);
+        }
+
+        @Override
+        public void run() {
+            String msg;
+            try {
+                while ((msg = in.readLine()) != null) {
+                    if ("exit".equalsIgnoreCase(msg.trim())) {
+                        break;
+                    }
+                    System.out.println(userName + ": " + msg);
+                    broadcast(userName, msg);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                try {
+                    socket.close();
+                    clients.remove(this);
+                    System.out.println(userName + " disconnected.");
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+}
